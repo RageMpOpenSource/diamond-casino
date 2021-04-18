@@ -540,6 +540,11 @@ const roulettePositions = [
 	{"x": 1148.981,"y": 247.0846, "z": -52.0409, "heading": 135}
 ];
 
+const highstakesPositions = [
+	{"x":1146.68,"y":249.62,"z":-51.03},
+	{"x":1131.68,"y":264.53,"z":-51.03}
+]
+
 const rouletteTables = [];
 
 /**
@@ -666,19 +671,20 @@ mp.events.add("clothes", (num) => {
     }
 })
 
-//	Figure out how to load the proper roulette table
 mp.events.add('loadRouletteTables', () => {
 	for(let i = 0; i < roulettePositions.length; i++){
 		let obj = roulettePositions[i].z === -52.8409 ? "vw_prop_casino_roulette_01" : "vw_prop_casino_roulette_01b";
 		let table = mp.objects.new(mp.game.joaat(obj), new mp.Vector3(roulettePositions[i].x, roulettePositions[i].y, roulettePositions[i].z), {
 			rotation: new mp.Vector3(0, 0, 360.0 - ((roulettePositions[i].heading + 360.0) % 360.0))
 		});
+		table.notifyStreaming = true;	//	Used for entityStreamIn
 		rouletteTables.push(table);
 
 		// let pedPos = calculatePedPos(new mp.Vector3(roulettePositions[i].x, roulettePositions[i].y, roulettePositions[i].z), roulettePositions[i].heading)
 		// mp.peds.new(mp.game.joaat("s_m_y_casino_01"), new mp.Vector3(parseInt(pedPos.x), parseInt(pedPos.y), parseInt(pedPos.z)), 0, mp.players.local.dimension);
 	}
 	mp.gui.chat.push("tables done")
+	mp.events.call("loadHighStakesVariation")
 });
 
 mp.events.add("destroyRouletteTables", () => {
@@ -692,22 +698,26 @@ mp.events.add("client:casino:enter", () => {
 });
 
 mp.events.add("client:casino:exit", () => {
-
+	mp.events.call("destroyRouletteTables");
 })
 
-mp.events.add('text', (num) => {
-	for(let i = 0; i < rouletteTables.length; i++){
-		mp.game.invoke("0x971DA0055324D033", rouletteTables[i].handle, parseInt(num));
-		// rouletteTables.push(table);
+mp.events.add('loadHighStakesVariation', async () => {
+	for(let i = 0; i < highstakesPositions.length; i++){
+		for(let j = 0; !mp.game.object.doesObjectOfTypeExistAtCoords(highstakesPositions[i].x, highstakesPositions[i].y, highstakesPositions[i].z, 5.0, mp.game.joaat("vw_prop_casino_3cardpoker_01b"), true) && j < 15; j++){
+			await mp.game.waitAsync(100);
+		}
+
+		let poker = mp.game.object.getClosestObjectOfType(highstakesPositions[i].x, highstakesPositions[i].y, highstakesPositions[i].z, 3.0, mp.game.joaat("vw_prop_casino_3cardpoker_01b"), true, true, true);
+		mp.game.invoke("0x971DA0055324D033", poker, 3);
+		let blackjack = mp.game.object.getClosestObjectOfType(highstakesPositions[i].x, highstakesPositions[i].y, highstakesPositions[i].z, 3.0, mp.game.joaat("vw_prop_casino_blckjack_01b"), true, true, true);
+		mp.game.invoke("0x971DA0055324D033", blackjack, 3);
 	}
-	mp.gui.chat.push("text")
 })
 
 mp.events.add("loadPeds", () => {
 	for(let i = 0; i < roulettePositions.length; i++){
 		let pedPos = calculatePedPos(new mp.Vector3(roulettePositions[i].x, roulettePositions[i].y, roulettePositions[i].z), roulettePositions[i].heading)
 		mp.peds.new(mp.game.joaat("s_m_y_casino_01"), new mp.Vector3(parseInt(pedPos.x), parseInt(pedPos.y), parseInt(pedPos.z)), 0, mp.players.local.dimension);
-		mp.console.logInfo(`Pos: ${JSON.stringify(pedPos)}`)
 	}
 })
 
@@ -724,3 +734,10 @@ function calculatePedPos(pos, newHeading){
 	newPos.z = pos.z;
 	return newPos;
 }
+
+mp.events.add("entityStreamIn", (entity) => {
+	//	Apply high stakes texture variation onto table
+    if (entity.type === "object" && entity.model === mp.game.joaat("vw_prop_casino_roulette_01b")) {
+        mp.game.invoke("0x971DA0055324D033", entity.handle, 3);
+    }
+});
